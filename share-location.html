@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Compartilhar localização</title>
+
+  <!--
+    Estilos simples inline (opcional). Mantenha a UI clara:
+    - Texto explicativo sobre consentimento
+    - Botão chamativo
+  -->
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding:20px; max-width:720px; margin:auto; }
+    h2{ margin-top:0 }
+    .box{ background:#f8f8f8; padding:12px; border-radius:8px; }
+    button{ padding:10px 16px; font-size:16px; border-radius:8px; cursor:pointer }
+    #status{ margin-top:12px; }
+    .small{ font-size:0.9rem; color:#444; }
+  </style>
+</head>
+<body>
+  <h2>Compartilhar minha localização</h2>
+
+  <!-- Texto de consentimento: deve ser explícito e claro -->
+  <div class="box">
+    <p class="small">
+      Ao clicar em <strong>Compartilhar localização</strong>, você autoriza o envio da
+      sua localização atual (coordenadas GPS) para o solicitante. Isso ocorrerá apenas se você
+      aceitar a solicitação de localização do navegador. Você pode recusar a qualquer momento.
+    </p>
+
+    <!-- 
+      Ideal: incluir checkbox onde usuário confirma o consentimento antes de clicar.
+      Isso gera um registro extra de que houve consentimento explícito.
+    -->
+    <label><input type="checkbox" id="consentChk"> Eu concordo em enviar minha localização</label>
+    <br/><br/>
+    <button id="btn">Compartilhar localização</button>
+    <p id="status"></p>
+  </div>
+
+<script>
+/*
+  CONFIGURAÇÕES IMPORTANTES
+  - RECEIVE_URL: substitua pela URL HTTPS do seu endpoint que receberá JSON.
+  - TOKEN: recomendação de passar token único no link (por ex. ?t=abc123) ou usar header Authorization.
+*/
+const RECEIVE_URL = 'https://seu-servidor.exemplo/recebe-localizacao';
+const btn = document.getElementById('btn');
+const status = document.getElementById('status');
+const consentChk = document.getElementById('consentChk');
+
+// Função utilitária para mostrar mensagens ao usuário
+function setStatus(msg) {
+  status.textContent = String(msg);
+}
+
+// Handler do clique
+btn.addEventListener('click', async () => {
+  // 1) Verificação de consentimento (UX + prova de autorização)
+  if (!consentChk.checked) {
+    setStatus('Por favor, marque a caixa de consentimento antes de prosseguir.');
+    return;
+  }
+
+  setStatus('Solicitando permissão de localização...');
+
+  // 2) Verifica se a API geolocation está disponível
+  if (!('geolocation' in navigator)) {
+    setStatus('Geolocalização não suportada no seu navegador.');
+    return;
+  }
+
+  // 3) Pede ao navegador a posição atual (o navegador exibirá o prompt de permissão)
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    // pos.coords contém latitude, longitude, accuracy, altitude (se disponível), speed, heading
+    const payload = {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      altitude: pos.coords.altitude,
+      altitudeAccuracy: pos.coords.altitudeAccuracy,
+      heading: pos.coords.heading,
+      speed: pos.coords.speed,
+      timestamp: pos.timestamp,
+      // opcional: meta (userAgent, referrer) para ajudar auditoria
+      userAgent: navigator.userAgent,
+      referrer: document.referrer
+    };
+
+    setStatus('Enviando localização...');
+
+    try {
+      const response = await fetch(RECEIVE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer SEU_TOKEN_AQUI' // se você usar token
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setStatus('Localização enviada com sucesso! Obrigado pelo consentimento.');
+      } else {
+        setStatus('Falha ao enviar localização. Tente novamente mais tarde.');
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus('Erro ao enviar localização. Verifique sua conexão.');
+    }
+
+  }, (err) => {
+    console.error(err);
+    setStatus('Permissão de localização negada ou erro ao obter posição.');
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+});
+</script>
